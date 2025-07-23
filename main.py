@@ -5,10 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 import os
-from typing import List, Optional, Dict, Any
+from typing import List
 
 from database import get_db, engine
-from models import Base, User, Token, ChatSession, ChatMessage, ConversationContext
+from models import Base, User, Token
 from schemas import (
     UserCreate, UserLogin, UserUpdate, Token as TokenSchema, TokenRefresh, UserResponse,
     GoogleOAuthRequest, AvatarUploadResponse,
@@ -27,7 +27,6 @@ from auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     REFRESH_TOKEN_EXPIRE_DAYS
 )
-from oauth import get_google_oauth_url, handle_google_oauth
 from chatbot_orchestrator import chatbot_orchestrator
 from security import security_manager
 from websocket_chat import websocket_endpoint
@@ -604,55 +603,6 @@ async def websocket_chat(
     WebSocket endpoint for real-time chat with the AI chatbot
     """
     await websocket_endpoint(websocket, token, session_id)
-
-# OAuth endpoints
-@app.get("/auth/google")
-def google_oauth_start():
-    """
-    Start Google OAuth flow
-    """
-    auth_url = get_google_oauth_url()
-    return {"url":auth_url}
-
-@app.post("/auth/google/callback")
-async def google_oauth_callback(
-    request: GoogleOAuthRequest, 
-    db: Session = Depends(get_db),
-    client_request: Request = None
-):
-    """
-    Handle Google OAuth callback (POST)
-    """
-    try:
-        result = await handle_google_oauth(request.code, request.redirect_uri, db, client_request)
-        return result
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth error: {str(e)}"
-        )
-
-@app.get("/auth/google/callback")
-async def google_oauth_callback_get(
-    code: str, 
-    db: Session = Depends(get_db),
-    request: Request = None
-):
-    """
-    Handle Google OAuth callback (GET)
-    """
-    try:
-        # For GET requests, we'll use a default redirect URI
-        # In production, you should handle this properly
-        redirect_uri = os.getenv('GOOGLE_REDIRECT_URI')
-        result = await handle_google_oauth(code, redirect_uri, db, request)
-        return result
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth error: {str(e)}"
-        )
-
 
 @app.post("/auth/google/token")
 async def google_token_login(payload: dict, db: Session = Depends(get_db)):

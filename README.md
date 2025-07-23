@@ -33,7 +33,7 @@ A comprehensive AI chatbot system built with FastAPI, featuring LLM integration,
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd ai_chatbot
+   cd fastyr-ai-chat-backend
    ```
 
 2. **Create virtual environment**
@@ -125,13 +125,7 @@ alembic upgrade head
 - `POST /chat/sessions` - Create new session
 - `DELETE /chat/sessions/{session_id}` - Delete session
 
-### WebSocket
-- `WS /ws/chat` - Real-time chat endpoint
-
-### OAuth
-- `GET /auth/google` - Start Google OAuth
-- `GET /auth/google/redirect` - Google OAuth redirect
-- `POST /auth/google/callback` - Handle OAuth callback
+- `POST /auth/google/toke - Decode Oauth token
 
 ### Admin
 - `GET /admin/security/stats` - Security statistics
@@ -153,16 +147,6 @@ The chatbot can use the following tools:
 - **Token Management**: Secure JWT token handling
 - **Session Validation**: UUID-based session validation
 
-## 🎨 Frontend
-
-A modern, responsive web interface is available at `/static/index.html` with:
-
-- User authentication (login/signup)
-- Real-time chat interface
-- Message history
-- Typing indicators
-- Mobile-responsive design
-
 ## 🚀 Usage Examples
 
 ### Basic Chat
@@ -181,14 +165,6 @@ curl -X POST "http://localhost:8000/chat/sessions" \
   -d '{"title": "My Chat Session"}'
 ```
 
-### WebSocket Connection
-```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/chat?token=YOUR_TOKEN');
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log(data);
-};
-```
 
 ## 📁 Project Structure
 
@@ -198,15 +174,11 @@ ai_chatbot/
 ├── models.py              # Database models
 ├── schemas.py             # Pydantic schemas
 ├── auth.py                # Authentication logic
-├── oauth.py               # OAuth integration
 ├── database.py            # Database configuration
 ├── llm_integration.py     # OpenAI integration
 ├── tools.py               # Chatbot tools
 ├── chatbot_orchestrator.py # Chat orchestration
 ├── security.py            # Security features
-├── websocket_chat.py      # WebSocket handling
-├── static/                # Frontend files
-│   └── index.html        # Web interface
 ├── alembic/               # Database migrations
 ├── requirements.txt       # Python dependencies
 └── env_template.txt      # Environment template
@@ -259,28 +231,6 @@ Access security stats at `/admin/security/stats` (admin only):
   "max_requests_per_hour": 100
 }
 ```
-
-## 🔮 Future Enhancements
-
-- [ ] Redis integration for production rate limiting
-- [ ] More advanced tools (file processing, API integrations)
-- [ ] Conversation analytics and insights
-- [ ] Multi-language support
-- [ ] Voice chat integration
-- [ ] Advanced context management
-- [ ] Plugin system for custom tools
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
 
 ## 🆘 Support
 
