@@ -32,7 +32,8 @@ from chatbot_orchestrator import chatbot_orchestrator
 from security import security_manager
 from websocket_chat import websocket_endpoint
 from file_upload import file_upload_manager
-
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -651,6 +652,66 @@ async def google_oauth_callback_get(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"OAuth error: {str(e)}"
         )
+
+
+@app.post("/auth/google/token")
+async def google_token_login(payload: dict, db: Session = Depends(get_db)):
+    token = payload.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+    GOOGLE_CLIENT_ID = os.getenv("CLIENT_ID")
+    try:
+        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        # Grab relevant fields
+        email = idinfo["email"]
+        full_name = idinfo.get("name")
+        google_id = idinfo.get("sub")
+        avatar_url = idinfo.get("picture")
+        # Find or create user
+        user = db.query(User).filter(User.google_id == google_id).first()
+        if not user:
+            user = db.query(User).filter(User.email == email).first()
+        if not user:
+            user = User(
+                email=email,
+                full_name=full_name,
+                google_id=google_id,
+                avatar_url=avatar_url,
+                auth_provider="google",
+                hashed_password=None
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            # Update user data
+            user.google_id = google_id
+            user.avatar_url = avatar_url
+            db.commit()
+        # Create JWT
+        token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        jwt_token = create_access_token(
+            data={"sub": user.email}, expires_delta=token_expires
+        )
+        # Store token in DB
+        token_obj = Token(user_id=user.id, token=jwt_token, token_type="access")
+        db.add(token_obj)
+        db.commit()
+        return {
+            "access_token": jwt_token,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "avatar_url": user.avatar_url,
+                "auth_provider": user.auth_provider,
+                "google_id": user.google_id
+            }
+        }
+    except ValueError as e:
+        print("Google Token Error:", e)
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
 
 if __name__ == "__main__":
     import uvicorn
