@@ -1,41 +1,32 @@
 import os
 import json
-from typing import List, Dict, Any, Optional
-from openai import OpenAI
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
-from langchain.memory import ConversationBufferMemory
+from typing import Dict, Any, List, Optional
+import openai
 from dotenv import load_dotenv
+
+from tools import chatbot_tools
 
 load_dotenv()
 
 class LLMIntegration:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model = "gpt-4o"
-        self.max_tokens = 4000
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        
+        self.client = openai.OpenAI(api_key=self.api_key)
+        self.model = "gpt-4o"  # Using GPT-4o for better performance
+        self.max_tokens = 1000
         self.temperature = 0.7
         
-        # Initialize LangChain chat model
-        self.langchain_model = ChatOpenAI(
-            model=self.model,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
-        
-        # System prompt for the chatbot
-        self.system_prompt = """You are a helpful AI assistant. You can help users with various tasks including:
-        - Answering questions
-        - Providing information
-        - Helping with calculations
-        - Writing and editing text
-        - Analyzing data
-        - And much more!
-        
-        Always be helpful, accurate, and friendly. If you're not sure about something, say so rather than guessing.
-        Remember the user's name and preferences from the conversation context."""
-    
+        self.system_prompt = """You are a helpful AI assistant with access to various tools. You can:
+- Perform calculations using the calculate tool
+- Search the web for current information using web_search
+- Get current time using get_current_time
+- Get weather information using weather_search
+
+When a user asks a question that requires using tools, use the appropriate tool and then provide a helpful response based on the tool's output. Always be helpful and informative in your responses."""
+
     async def process_message(
         self, 
         message: str, 
@@ -44,7 +35,7 @@ class LLMIntegration:
         tools: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Process a user message and return AI response
+        Process a user message and return AI response with proper tool handling
         """
         try:
             # Prepare messages
@@ -79,10 +70,8 @@ class LLMIntegration:
                 params["tools"] = tools
                 params["tool_choice"] = "auto"
             
-            # Make API call
+            # Make initial API call
             response = self.client.chat.completions.create(**params)
-            
-            # Extract response
             assistant_message = response.choices[0].message
             tokens_used = response.usage.total_tokens if response.usage else None
             
@@ -99,6 +88,42 @@ class LLMIntegration:
                             "arguments": tool_call.function.arguments
                         }
                     })
+                
+                # Execute tools and continue conversation
+                messages.append(assistant_message)
+                
+                # Execute each tool call
+                for tool_call in assistant_message.tool_calls:
+                    tool_name = tool_call.function.name
+                    arguments = json.loads(tool_call.function.arguments)
+                    
+                    # Execute the tool
+                    tool_result = await chatbot_tools.execute_tool(tool_name, arguments)
+                    
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": tool_result
+                    })
+                
+                # Make another API call to get final response
+                final_response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature
+                )
+                
+                final_assistant_message = final_response.choices[0].message
+                final_tokens_used = final_response.usage.total_tokens if final_response.usage else None
+                
+                return {
+                    "message": final_assistant_message.content or "",
+                    "tokens_used": final_tokens_used,
+                    "tool_calls": tool_calls,
+                    "context": context
+                }
             
             return {
                 "message": assistant_message.content or "",
@@ -191,36 +216,6 @@ class LLMIntegration:
                 "tokens_used": None,
                 "tool_calls": None
             }
-    
-    def generate_response_with_langchain(
-        self, 
-        user_message: str, 
-        conversation_history: List[Dict[str, Any]] = None
-    ) -> str:
-        """
-        Generate response using LangChain (alternative method)
-        """
-        try:
-            # Convert conversation history to LangChain format
-            messages = []
-            
-            if conversation_history:
-                for msg in conversation_history:
-                    if msg["role"] == "user":
-                        messages.append(HumanMessage(content=msg["content"]))
-                    elif msg["role"] == "assistant":
-                        messages.append(AIMessage(content=msg["content"]))
-            
-            # Add current user message
-            messages.append(HumanMessage(content=user_message))
-            
-            # Generate response
-            response = self.langchain_model.invoke(messages)
-            
-            return response.content
-            
-        except Exception as e:
-            return f"I apologize, but I encountered an error: {str(e)}"
     
     def count_tokens(self, text: str) -> int:
         """

@@ -76,9 +76,10 @@ class SecurityManager:
         if len(message) > self.max_message_length:
             return False
         
-        # Check for suspicious content
+        # Check for suspicious content - compare sanitized with stripped original
         sanitized = self.sanitize_input(message)
-        if sanitized != message:
+        stripped_original = message.strip()
+        if sanitized != stripped_original:
             return False
         
         return True
